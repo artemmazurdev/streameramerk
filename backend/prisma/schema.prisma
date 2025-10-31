@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String      @id @default(uuid())
+  email            String      @unique
+  password         String
+  name             String
+  avatar           String?
+  subscriptionTier String      @default("free") // free, basic, professional, enterprise
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  
+  broadcasts       Broadcast[]
+  recordings       Recording[]
+  participants     Participant[]
+  
+  @@index([email])
+}
+
+model Broadcast {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title        String
+  description  String?
+  status       String   @default("scheduled") // scheduled, live, ended, recording
+  startTime    DateTime?
+  endTime      DateTime?
+  thumbnailUrl String?
+  viewerCount  Int      @default(0)
+  
+  // Settings (JSON)
+  layoutType             String  @default("grid") // grid, spotlight, sidebar, custom
+  maxParticipants        Int     @default(10)
+  enableChat             Boolean @default(true)
+  enableRecording        Boolean @default(true)
+  enableVirtualBackground Boolean @default(false)
+  overlays               Json?   // Array of overlay objects
+  brandingLogo           String?
+  brandingColors         Json?   // { primary, secondary }
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  destinations Destination[]
+  participants Participant[]
+  recordings   Recording[]
+  
+  @@index([userId])
+  @@index([status])
+}
+
+model Destination {
+  id          String    @id @default(uuid())
+  broadcastId String
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  
+  platform    String    // youtube, facebook, twitch, custom
+  streamKey   String    // Encrypted
+  rtmpUrl     String
+  enabled     Boolean   @default(true)
+  status      String    @default("disconnected") // connected, disconnected, error
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([broadcastId])
+}
+
+model Participant {
+  id          String    @id @default(uuid())
+  broadcastId String
+  broadcast   Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  name        String
+  avatar      String?
+  role        String    @default("guest") // host, guest, viewer
+  
+  audioEnabled   Boolean @default(true)
+  videoEnabled   Boolean @default(true)
+  screenSharing  Boolean @default(false)
+  handRaised     Boolean @default(false)
+  
+  joinedAt    DateTime  @default(now())
+  leftAt      DateTime?
+  
+  @@index([broadcastId])
+  @@index([userId])
+}
+
+model Recording {
+  id          String    @id @default(uuid())
+  broadcastId String
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title       String
+  duration    Int       // В секундах
+  fileSize    BigInt    // В байтах
+  url         String
+  thumbnailUrl String?
+  status      String    @default("processing") // processing, ready, failed
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([broadcastId])
+  @@index([userId])
+}
+
+model ChatMessage {
+  id          String    @id @default(uuid())
+  broadcastId String
+  
+  userId      String
+  userName    String
+  userAvatar  String?
+  
+  message     String
+  type        String    @default("text") // text, emoji, system
+  
+  createdAt   DateTime  @default(now())
+  
+  @@index([broadcastId])
+  @@index([createdAt])
+}
+
+
+

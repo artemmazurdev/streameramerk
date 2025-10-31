@@ -1,0 +1,41 @@
+{
+  "name": "streamyard-clone",
+  "version": "1.0.0",
+  "description": "Full-featured live streaming platform",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "signaling-server",
+    "media-server",
+    "compositor",
+    "rtmp-relay",
+    "shared"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm run install:workspaces",
+    "install:workspaces": "npm install --workspaces",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:signaling\" \"npm run dev:media\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:signaling": "cd signaling-server && npm run dev",
+    "dev:media": "cd media-server && npm run dev",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "clean": "npm run clean --workspaces && rm -rf node_modules",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:logs": "docker-compose logs -f"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
+
+
+

@@ -1,0 +1,173 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: streamyard-postgres
+    environment:
+      POSTGRES_USER: streamyard
+      POSTGRES_PASSWORD: streamyard_password
+      POSTGRES_DB: streamyard
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - streamyard-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamyard"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: streamyard-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - streamyard-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: streamyard-backend
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://streamyard:streamyard_password@postgres:5432/streamyard
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      PORT: 4000
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - streamyard-network
+    command: npm run dev
+
+  # Signaling Server (WebSocket)
+  signaling:
+    build:
+      context: ./signaling-server
+      dockerfile: Dockerfile
+    container_name: streamyard-signaling
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./signaling-server:/app
+      - /app/node_modules
+    depends_on:
+      - redis
+    networks:
+      - streamyard-network
+    command: npm run dev
+
+  # Media Server (Mediasoup SFU)
+  media-server:
+    build:
+      context: ./media-server
+      dockerfile: Dockerfile
+    container_name: streamyard-media-server
+    environment:
+      NODE_ENV: development
+      PORT: 6000
+      RTC_MIN_PORT: 40000
+      RTC_MAX_PORT: 49999
+      ANNOUNCED_IP: 127.0.0.1
+    ports:
+      - "6000:6000"
+      - "40000-49999:40000-49999/udp"
+      - "40000-49999:40000-49999/tcp"
+    volumes:
+      - ./media-server:/app
+      - /app/node_modules
+    networks:
+      - streamyard-network
+    command: npm run dev
+
+  # RTMP Server
+  rtmp-relay:
+    build:
+      context: ./rtmp-relay
+      dockerfile: Dockerfile
+    container_name: streamyard-rtmp
+    ports:
+      - "1935:1935"
+      - "8888:8888"
+    volumes:
+      - ./rtmp-relay:/app
+      - /app/node_modules
+    networks:
+      - streamyard-network
+    command: npm run dev
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: streamyard-frontend
+    environment:
+      VITE_API_URL: http://localhost:4000
+      VITE_SIGNALING_URL: ws://localhost:5000
+      VITE_MEDIA_SERVER_URL: http://localhost:6000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+      - signaling
+    networks:
+      - streamyard-network
+    command: npm run dev
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: streamyard-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - streamyard-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  streamyard-network:
+    driver: bridge
+
+
+
